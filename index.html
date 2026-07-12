@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WordWeaver</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Nunito', sans-serif;
+            background-color: #0f172a;
+            overscroll-behavior: none; /* Prevents pull-to-refresh on mobile */
+        }
+        
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+            100% { transform: scale(1); }
+        }
+        .animate-pop {
+            animation: pop 0.3s ease-out forwards;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-6px); }
+            40%, 80% { transform: translateX(6px); }
+        }
+        .animate-shake {
+            animation: shake 0.4s ease-in-out;
+        }
+
+        /* Custom Scrollbar for the Board */
+        #board::-webkit-scrollbar {
+            width: 6px;
+        }
+        #board::-webkit-scrollbar-track {
+            background: rgba(30, 41, 59, 0.5); 
+            border-radius: 4px;
+        }
+        #board::-webkit-scrollbar-thumb {
+            background: rgba(71, 85, 105, 0.8); 
+            border-radius: 4px;
+        }
+        #board::-webkit-scrollbar-thumb:hover {
+            background: rgba(100, 116, 139, 1); 
+        }
+    </style>
+</head>
+<body>
+    <div class="h-[100dvh] w-full bg-slate-900 text-white flex flex-col relative overflow-hidden">
+        <!-- Confetti Canvas -->
+        <canvas id="confetti-canvas" class="absolute inset-0 pointer-events-none z-50"></canvas>
+        
+        <!-- Header -->
+        <header class="flex justify-between items-center px-5 py-4 bg-slate-800 shadow-md z-10 border-b border-slate-700/50">
+            <h1 class="text-2xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 tracking-wide">
+                WordWeaver
+            </h1>
+            <div class="flex gap-5 text-sm font-semibold text-slate-400 uppercase tracking-wider">
+                <div class="flex flex-col items-end">
+                    <span class="text-xs">Level</span>
+                    <span id="level-display" class="text-white text-base">1</span>
+                </div>
+                <div class="flex flex-col items-end">
+                    <span class="text-xs">Score</span>
+                    <span id="score-display" class="text-emerald-400 text-base">0</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- AI Hint Modal -->
+        <div id="hint-modal" class="absolute top-20 left-4 right-4 bg-slate-800/95 backdrop-blur-md p-5 rounded-2xl shadow-[0_0_25px_rgba(168,85,247,0.3)] border border-purple-500/50 transform -translate-y-4 opacity-0 pointer-events-none transition-all duration-300 z-40">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2 text-purple-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                    <h3 class="font-extrabold tracking-wide text-sm uppercase">AI Weaver Clue</h3>
+                </div>
+                <button id="btn-close-hint" class="text-slate-400 hover:text-white transition-colors focus:outline-none">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <p id="hint-text" class="text-white text-base font-semibold leading-relaxed italic">...</p>
+        </div>
+
+        <main class="flex-1 flex flex-col max-w-md w-full mx-auto p-4 relative z-10 overflow-hidden">
+            
+            <!-- Progress Section -->
+            <div class="mb-4">
+                <div class="flex justify-between text-xs text-slate-400 mb-2 uppercase font-bold tracking-wider">
+                    <span>Words Found</span>
+                    <span id="progress-text">0 / 0</span>
+                </div>
+                <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden shadow-inner">
+                    <div id="progress-bar" class="h-full bg-gradient-to-r from-blue-500 to-emerald-500 w-0 transition-all duration-500 ease-out"></div>
+                </div>
+            </div>
+
+            <!-- Found Words Board -->
+            <div id="board" class="flex-1 bg-slate-800/60 rounded-2xl p-5 overflow-y-auto shadow-inner mb-4 border border-slate-700/50">
+                <div class="flex flex-wrap gap-x-6 gap-y-4 justify-center" id="board-container">
+                    <!-- Found words will be injected here dynamically -->
+                </div>
+            </div>
+
+            <!-- Input Display Area -->
+            <div class="h-16 flex items-center justify-center mb-6">
+                <div id="input-display" class="flex gap-2 min-h-[3rem] items-center">
+                    <!-- Selected letters appear here -->
+                    <div class="text-slate-500 font-bold text-2xl tracking-widest animate-pulse">...</div>
+                </div>
+            </div>
+
+            <!-- Action Controls -->
+            <div class="flex justify-center gap-3 sm:gap-5 mb-6">
+                
+                <button id="btn-hint" class="relative p-3 bg-purple-700/80 rounded-full text-purple-200 hover:bg-purple-600 hover:text-white active:scale-95 transition-all shadow-md focus:outline-none touch-manipulation group flex items-center justify-center border border-purple-500/30">
+                    <span id="hint-badge" class="absolute -top-1 -right-1 bg-purple-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">3</span>
+                    <!-- Sparkle Icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+                    </svg>
+                    <!-- Spinner Icon (hidden by default) -->
+                    <svg id="hint-spinner" class="animate-spin absolute inset-0 m-auto hidden" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                    </svg>
+                </button>
+
+                <button id="btn-shuffle" class="p-3 bg-slate-700 rounded-full text-slate-300 hover:bg-slate-600 hover:text-white active:scale-95 transition-all shadow-md focus:outline-none touch-manipulation">
+                    <!-- Shuffle Icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="16 3 21 3 21 8"></polyline>
+                        <line x1="4" y1="20" x2="21" y2="3"></line>
+                        <polyline points="21 16 21 21 16 21"></polyline>
+                        <line x1="15" y1="15" x2="21" y2="21"></line>
+                        <line x1="4" y1="4" x2="9" y2="9"></line>
+                    </svg>
+                </button>
+                
+                <button id="btn-submit" class="px-10 py-3 bg-blue-600 rounded-full font-extrabold tracking-wide text-lg hover:bg-blue-500 active:scale-95 transition-all shadow-[0_4px_0_0_#1d4ed8] active:shadow-none active:translate-y-1 focus:outline-none touch-manipulation">
+                    SUBMIT
+                </button>
+                
+                <button id="btn-clear" class="p-3 bg-slate-700 rounded-full text-slate-300 hover:bg-slate-600 hover:text-white active:scale-95 transition-all shadow-md focus:outline-none touch-manipulation">
+                    <!-- Backspace Icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path>
+                        <line x1="18" y1="9" x2="12" y2="15"></line>
+                        <line x1="12" y1="9" x2="18" y2="15"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Letter Tray -->
+            <div id="letter-tray" class="flex justify-center gap-3 flex-wrap mb-2">
+                <!-- Letter buttons injected here -->
+            </div>
+        </main>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="absolute bottom-32 left-1/2 transform -translate-x-1/2 px-6 py-2.5 rounded-full shadow-lg opacity-0 pointer-events-none transition-opacity duration-300 z-50 text-white font-bold text-sm tracking-wide whitespace-nowrap">
+            Message
+        </div>
+
+        <!-- Level Complete Modal -->
+        <div id="modal" class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-all duration-300 z-40">
+            <div class="bg-slate-800 p-8 rounded-3xl shadow-2xl text-center transform scale-95 transition-transform duration-300 border border-slate-700 w-11/12 max-w-sm" id="modal-content">
+                <h2 class="text-3xl font-extrabold mb-3 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">Level Complete!</h2>
+                <p class="text-slate-300 mb-8 font-semibold" id="modal-msg">You found all the words!</p>
+                <button id="btn-next-level" class="w-full py-4 bg-emerald-500 rounded-2xl font-extrabold text-slate-900 text-lg hover:bg-emerald-400 active:scale-95 transition-all shadow-[0_5px_0_0_#047857] active:shadow-none active:translate-y-[5px] focus:outline-none">
+                    NEXT LEVEL
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/game.js"></script>
+</body>
+</html>
